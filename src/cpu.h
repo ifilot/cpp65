@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+//
+// cpp65 is free software: you can redistribute it and/or modify it under
+// the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// any later version.
+
 #pragma once
 
 #include "bus.h"
@@ -7,6 +14,21 @@
 #include <cstdint>
 
 namespace cpp65 {
+
+/**
+ * @brief Selects the CPU variant and its opcode timing/behavior table.
+ */
+enum class CPUModel {
+    /**
+     * @brief Original NMOS 6502 official instruction set.
+     */
+    nmos6502,
+
+    /**
+     * @brief Western Design Center 65C02 instruction set.
+     */
+    wdc65c02,
+};
 
 class CPU {
 private:
@@ -34,15 +56,19 @@ private:
     bool stopped = false;
     bool waiting = false;
 
-    static constinit const std::array<Instruction, 256> table;
+    CPUModel model;
+    const std::array<Instruction, 256>* table;
+
+    static constinit const std::array<Instruction, 256> nmos6502_table;
+    static constinit const std::array<Instruction, 256> wdc65c02_table;
 
     Bus& bus;
 
 public:
     /**
-     * @brief Constructs a CPU connected to a bus.
+     * @brief Constructs a CPU connected to a bus with the selected CPU model.
      */
-    explicit CPU(Bus& bus_);
+    explicit CPU(Bus& bus_, CPUModel model_ = CPUModel::wdc65c02);
 
     /**
      * @brief Advances the CPU by one clock cycle.
@@ -140,6 +166,11 @@ private:
      * @brief Extracts the bit index encoded in RMB/SMB/BBR/BBS opcodes.
      */
     std::uint8_t bit_index_from_opcode() const;
+
+    /**
+     * @brief Returns the dispatch entry for the current opcode.
+     */
+    const Instruction& current_instruction() const;
 
 
     /**
@@ -407,6 +438,11 @@ private:
      * @brief Executes no operation.
      */
     std::uint8_t nop();
+
+    /**
+     * @brief Executes an unsupported or jammed opcode.
+     */
+    std::uint8_t kil();
 
     /**
      * @brief Executes logical OR with the accumulator.

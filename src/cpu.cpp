@@ -1,12 +1,21 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+//
+// cpp65 is free software: you can redistribute it and/or modify it under
+// the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// any later version.
+
 #include "cpu.h"
 
 namespace cpp65 {
 
 /**
- * @brief Constructs a CPU connected to a bus.
+ * @brief Constructs a CPU connected to a bus with the selected CPU model.
  */
-CPU::CPU(Bus& bus_)
-    : bus(bus_) {}
+CPU::CPU(Bus& bus_, CPUModel model_)
+    : model(model_),
+      table(model_ == CPUModel::nmos6502 ? &nmos6502_table : &wdc65c02_table),
+      bus(bus_) {}
 
 /**
  * @brief Advances the CPU by one clock cycle.
@@ -38,7 +47,7 @@ void CPU::tick() {
 
     opcode = read(pc++);
     
-    const Instruction& inst = table[opcode];
+    const Instruction& inst = (*table)[opcode];
 
     cycles = inst.cycles;
 
@@ -89,7 +98,7 @@ void CPU::irq() {
     interrupt(0xFFFE, 7, false);
 }
 
-constinit const std::array<CPU::Instruction, 256> CPU::table = []() constexpr {
+constinit const std::array<CPU::Instruction, 256> CPU::wdc65c02_table = []() constexpr {
     std::array<Instruction, 256> table{};
     table.fill({ "NOP", &CPU::nop, &CPU::imp, 1 });
 
@@ -214,7 +223,7 @@ constinit const std::array<CPU::Instruction, 256> CPU::table = []() constexpr {
     table[0x69] = { "ADC", &CPU::adc, &CPU::imm, 2 };
     table[0x6A] = { "ROR", &CPU::ror, &CPU::acc, 2 };
     table[0x6B] = { "NOP", &CPU::nop, &CPU::imp, 1 };
-    table[0x6C] = { "JMP", &CPU::jmp, &CPU::ind, 6 };
+    table[0x6C] = { "JMP", &CPU::jmp, &CPU::ind, 5 };
     table[0x6D] = { "ADC", &CPU::adc, &CPU::abs, 4 };
     table[0x6E] = { "ROR", &CPU::ror, &CPU::abs, 6 };
     table[0x6F] = { "BBR", &CPU::bbr, &CPU::zpr, 5 };
@@ -384,11 +393,177 @@ constinit const std::array<CPU::Instruction, 256> CPU::table = []() constexpr {
     return table;
 }();
 
+constinit const std::array<CPU::Instruction, 256> CPU::nmos6502_table = []() constexpr {
+    std::array<Instruction, 256> table{};
+    table.fill({ "KIL", &CPU::kil, &CPU::imp, 1 });
+
+    table[0x00] = { "BRK", &CPU::brk, &CPU::imm, 7 };
+    table[0x01] = { "ORA", &CPU::ora, &CPU::izx, 6 };
+    table[0x05] = { "ORA", &CPU::ora, &CPU::zp0, 3 };
+    table[0x06] = { "ASL", &CPU::asl, &CPU::zp0, 5 };
+    table[0x08] = { "PHP", &CPU::php, &CPU::imp, 3 };
+    table[0x09] = { "ORA", &CPU::ora, &CPU::imm, 2 };
+    table[0x0A] = { "ASL", &CPU::asl, &CPU::acc, 2 };
+    table[0x0D] = { "ORA", &CPU::ora, &CPU::abs, 4 };
+    table[0x0E] = { "ASL", &CPU::asl, &CPU::abs, 6 };
+    table[0x10] = { "BPL", &CPU::bpl, &CPU::rel, 2 };
+    table[0x11] = { "ORA", &CPU::ora, &CPU::izy, 5 };
+    table[0x15] = { "ORA", &CPU::ora, &CPU::zpx, 4 };
+    table[0x16] = { "ASL", &CPU::asl, &CPU::zpx, 6 };
+    table[0x18] = { "CLC", &CPU::clc, &CPU::imp, 2 };
+    table[0x19] = { "ORA", &CPU::ora, &CPU::aby, 4 };
+    table[0x1D] = { "ORA", &CPU::ora, &CPU::abx, 4 };
+    table[0x1E] = { "ASL", &CPU::asl, &CPU::abx, 7 };
+    table[0x20] = { "JSR", &CPU::jsr, &CPU::abs, 6 };
+    table[0x21] = { "AND", &CPU::and_, &CPU::izx, 6 };
+    table[0x24] = { "BIT", &CPU::bit, &CPU::zp0, 3 };
+    table[0x25] = { "AND", &CPU::and_, &CPU::zp0, 3 };
+    table[0x26] = { "ROL", &CPU::rol, &CPU::zp0, 5 };
+    table[0x28] = { "PLP", &CPU::plp, &CPU::imp, 4 };
+    table[0x29] = { "AND", &CPU::and_, &CPU::imm, 2 };
+    table[0x2A] = { "ROL", &CPU::rol, &CPU::acc, 2 };
+    table[0x2C] = { "BIT", &CPU::bit, &CPU::abs, 4 };
+    table[0x2D] = { "AND", &CPU::and_, &CPU::abs, 4 };
+    table[0x2E] = { "ROL", &CPU::rol, &CPU::abs, 6 };
+    table[0x30] = { "BMI", &CPU::bmi, &CPU::rel, 2 };
+    table[0x31] = { "AND", &CPU::and_, &CPU::izy, 5 };
+    table[0x35] = { "AND", &CPU::and_, &CPU::zpx, 4 };
+    table[0x36] = { "ROL", &CPU::rol, &CPU::zpx, 6 };
+    table[0x38] = { "SEC", &CPU::sec, &CPU::imp, 2 };
+    table[0x39] = { "AND", &CPU::and_, &CPU::aby, 4 };
+    table[0x3D] = { "AND", &CPU::and_, &CPU::abx, 4 };
+    table[0x3E] = { "ROL", &CPU::rol, &CPU::abx, 7 };
+    table[0x40] = { "RTI", &CPU::rti, &CPU::imp, 6 };
+    table[0x41] = { "EOR", &CPU::eor, &CPU::izx, 6 };
+    table[0x45] = { "EOR", &CPU::eor, &CPU::zp0, 3 };
+    table[0x46] = { "LSR", &CPU::lsr, &CPU::zp0, 5 };
+    table[0x48] = { "PHA", &CPU::pha, &CPU::imp, 3 };
+    table[0x49] = { "EOR", &CPU::eor, &CPU::imm, 2 };
+    table[0x4A] = { "LSR", &CPU::lsr, &CPU::acc, 2 };
+    table[0x4C] = { "JMP", &CPU::jmp, &CPU::abs, 3 };
+    table[0x4D] = { "EOR", &CPU::eor, &CPU::abs, 4 };
+    table[0x4E] = { "LSR", &CPU::lsr, &CPU::abs, 6 };
+    table[0x50] = { "BVC", &CPU::bvc, &CPU::rel, 2 };
+    table[0x51] = { "EOR", &CPU::eor, &CPU::izy, 5 };
+    table[0x55] = { "EOR", &CPU::eor, &CPU::zpx, 4 };
+    table[0x56] = { "LSR", &CPU::lsr, &CPU::zpx, 6 };
+    table[0x58] = { "CLI", &CPU::cli, &CPU::imp, 2 };
+    table[0x59] = { "EOR", &CPU::eor, &CPU::aby, 4 };
+    table[0x5D] = { "EOR", &CPU::eor, &CPU::abx, 4 };
+    table[0x5E] = { "LSR", &CPU::lsr, &CPU::abx, 7 };
+    table[0x60] = { "RTS", &CPU::rts, &CPU::imp, 6 };
+    table[0x61] = { "ADC", &CPU::adc, &CPU::izx, 6 };
+    table[0x65] = { "ADC", &CPU::adc, &CPU::zp0, 3 };
+    table[0x66] = { "ROR", &CPU::ror, &CPU::zp0, 5 };
+    table[0x68] = { "PLA", &CPU::pla, &CPU::imp, 4 };
+    table[0x69] = { "ADC", &CPU::adc, &CPU::imm, 2 };
+    table[0x6A] = { "ROR", &CPU::ror, &CPU::acc, 2 };
+    table[0x6C] = { "JMP", &CPU::jmp, &CPU::ind, 5 };
+    table[0x6D] = { "ADC", &CPU::adc, &CPU::abs, 4 };
+    table[0x6E] = { "ROR", &CPU::ror, &CPU::abs, 6 };
+    table[0x70] = { "BVS", &CPU::bvs, &CPU::rel, 2 };
+    table[0x71] = { "ADC", &CPU::adc, &CPU::izy, 5 };
+    table[0x75] = { "ADC", &CPU::adc, &CPU::zpx, 4 };
+    table[0x76] = { "ROR", &CPU::ror, &CPU::zpx, 6 };
+    table[0x78] = { "SEI", &CPU::sei, &CPU::imp, 2 };
+    table[0x79] = { "ADC", &CPU::adc, &CPU::aby, 4 };
+    table[0x7D] = { "ADC", &CPU::adc, &CPU::abx, 4 };
+    table[0x7E] = { "ROR", &CPU::ror, &CPU::abx, 7 };
+    table[0x81] = { "STA", &CPU::sta, &CPU::izx, 6 };
+    table[0x84] = { "STY", &CPU::sty, &CPU::zp0, 3 };
+    table[0x85] = { "STA", &CPU::sta, &CPU::zp0, 3 };
+    table[0x86] = { "STX", &CPU::stx, &CPU::zp0, 3 };
+    table[0x88] = { "DEY", &CPU::dey, &CPU::imp, 2 };
+    table[0x8A] = { "TXA", &CPU::txa, &CPU::imp, 2 };
+    table[0x8C] = { "STY", &CPU::sty, &CPU::abs, 4 };
+    table[0x8D] = { "STA", &CPU::sta, &CPU::abs, 4 };
+    table[0x8E] = { "STX", &CPU::stx, &CPU::abs, 4 };
+    table[0x90] = { "BCC", &CPU::bcc, &CPU::rel, 2 };
+    table[0x91] = { "STA", &CPU::sta, &CPU::izy, 6 };
+    table[0x94] = { "STY", &CPU::sty, &CPU::zpx, 4 };
+    table[0x95] = { "STA", &CPU::sta, &CPU::zpx, 4 };
+    table[0x96] = { "STX", &CPU::stx, &CPU::zpy, 4 };
+    table[0x98] = { "TYA", &CPU::tya, &CPU::imp, 2 };
+    table[0x99] = { "STA", &CPU::sta, &CPU::aby, 5 };
+    table[0x9A] = { "TXS", &CPU::txs, &CPU::imp, 2 };
+    table[0x9D] = { "STA", &CPU::sta, &CPU::abx, 5 };
+    table[0xA0] = { "LDY", &CPU::ldy, &CPU::imm, 2 };
+    table[0xA1] = { "LDA", &CPU::lda, &CPU::izx, 6 };
+    table[0xA2] = { "LDX", &CPU::ldx, &CPU::imm, 2 };
+    table[0xA4] = { "LDY", &CPU::ldy, &CPU::zp0, 3 };
+    table[0xA5] = { "LDA", &CPU::lda, &CPU::zp0, 3 };
+    table[0xA6] = { "LDX", &CPU::ldx, &CPU::zp0, 3 };
+    table[0xA8] = { "TAY", &CPU::tay, &CPU::imp, 2 };
+    table[0xA9] = { "LDA", &CPU::lda, &CPU::imm, 2 };
+    table[0xAA] = { "TAX", &CPU::tax, &CPU::imp, 2 };
+    table[0xAC] = { "LDY", &CPU::ldy, &CPU::abs, 4 };
+    table[0xAD] = { "LDA", &CPU::lda, &CPU::abs, 4 };
+    table[0xAE] = { "LDX", &CPU::ldx, &CPU::abs, 4 };
+    table[0xB0] = { "BCS", &CPU::bcs, &CPU::rel, 2 };
+    table[0xB1] = { "LDA", &CPU::lda, &CPU::izy, 5 };
+    table[0xB4] = { "LDY", &CPU::ldy, &CPU::zpx, 4 };
+    table[0xB5] = { "LDA", &CPU::lda, &CPU::zpx, 4 };
+    table[0xB6] = { "LDX", &CPU::ldx, &CPU::zpy, 4 };
+    table[0xB8] = { "CLV", &CPU::clv, &CPU::imp, 2 };
+    table[0xB9] = { "LDA", &CPU::lda, &CPU::aby, 4 };
+    table[0xBA] = { "TSX", &CPU::tsx, &CPU::imp, 2 };
+    table[0xBC] = { "LDY", &CPU::ldy, &CPU::abx, 4 };
+    table[0xBD] = { "LDA", &CPU::lda, &CPU::abx, 4 };
+    table[0xBE] = { "LDX", &CPU::ldx, &CPU::aby, 4 };
+    table[0xC0] = { "CPY", &CPU::cpy, &CPU::imm, 2 };
+    table[0xC1] = { "CMP", &CPU::cmp, &CPU::izx, 6 };
+    table[0xC4] = { "CPY", &CPU::cpy, &CPU::zp0, 3 };
+    table[0xC5] = { "CMP", &CPU::cmp, &CPU::zp0, 3 };
+    table[0xC6] = { "DEC", &CPU::dec, &CPU::zp0, 5 };
+    table[0xC8] = { "INY", &CPU::iny, &CPU::imp, 2 };
+    table[0xC9] = { "CMP", &CPU::cmp, &CPU::imm, 2 };
+    table[0xCA] = { "DEX", &CPU::dex, &CPU::imp, 2 };
+    table[0xCC] = { "CPY", &CPU::cpy, &CPU::abs, 4 };
+    table[0xCD] = { "CMP", &CPU::cmp, &CPU::abs, 4 };
+    table[0xCE] = { "DEC", &CPU::dec, &CPU::abs, 6 };
+    table[0xD0] = { "BNE", &CPU::bne, &CPU::rel, 2 };
+    table[0xD1] = { "CMP", &CPU::cmp, &CPU::izy, 5 };
+    table[0xD5] = { "CMP", &CPU::cmp, &CPU::zpx, 4 };
+    table[0xD6] = { "DEC", &CPU::dec, &CPU::zpx, 6 };
+    table[0xD8] = { "CLD", &CPU::cld, &CPU::imp, 2 };
+    table[0xD9] = { "CMP", &CPU::cmp, &CPU::aby, 4 };
+    table[0xDD] = { "CMP", &CPU::cmp, &CPU::abx, 4 };
+    table[0xDE] = { "DEC", &CPU::dec, &CPU::abx, 7 };
+    table[0xE0] = { "CPX", &CPU::cpx, &CPU::imm, 2 };
+    table[0xE1] = { "SBC", &CPU::sbc, &CPU::izx, 6 };
+    table[0xE4] = { "CPX", &CPU::cpx, &CPU::zp0, 3 };
+    table[0xE5] = { "SBC", &CPU::sbc, &CPU::zp0, 3 };
+    table[0xE6] = { "INC", &CPU::inc, &CPU::zp0, 5 };
+    table[0xE8] = { "INX", &CPU::inx, &CPU::imp, 2 };
+    table[0xE9] = { "SBC", &CPU::sbc, &CPU::imm, 2 };
+    table[0xEA] = { "NOP", &CPU::nop, &CPU::imp, 2 };
+    table[0xEC] = { "CPX", &CPU::cpx, &CPU::abs, 4 };
+    table[0xED] = { "SBC", &CPU::sbc, &CPU::abs, 4 };
+    table[0xEE] = { "INC", &CPU::inc, &CPU::abs, 6 };
+    table[0xF0] = { "BEQ", &CPU::beq, &CPU::rel, 2 };
+    table[0xF1] = { "SBC", &CPU::sbc, &CPU::izy, 5 };
+    table[0xF5] = { "SBC", &CPU::sbc, &CPU::zpx, 4 };
+    table[0xF6] = { "INC", &CPU::inc, &CPU::zpx, 6 };
+    table[0xF8] = { "SED", &CPU::sed, &CPU::imp, 2 };
+    table[0xF9] = { "SBC", &CPU::sbc, &CPU::aby, 4 };
+    table[0xFD] = { "SBC", &CPU::sbc, &CPU::abx, 4 };
+    table[0xFE] = { "INC", &CPU::inc, &CPU::abx, 7 };
+
+    return table;
+}();
+
 /**
  * @brief Extracts the bit index encoded in RMB/SMB/BBR/BBS opcodes.
  */
 std::uint8_t CPU::bit_index_from_opcode() const {
     return (opcode >> 4) & 0x07;
+}
+
+/**
+ * @brief Returns the dispatch entry for the current opcode.
+ */
+const CPU::Instruction& CPU::current_instruction() const {
+    return (*table)[opcode];
 }
 
 /**
@@ -435,7 +610,7 @@ void CPU::write(std::uint16_t addr, std::uint8_t value) {
  * @brief Fetches the operand for the current instruction.
  */
 std::uint8_t CPU::fetch() {
-    if (table[opcode].addrmode == &CPU::acc || table[opcode].addrmode == &CPU::imp) {
+    if (current_instruction().addrmode == &CPU::acc || current_instruction().addrmode == &CPU::imp) {
         fetched = reg_a;
     } else {
         fetched = read(addr_abs);
@@ -596,7 +771,13 @@ std::uint8_t CPU::aby() {
 std::uint8_t CPU::ind() {
     const std::uint16_t ptr = read16(pc);
     pc += 2;
-    addr_abs = read16(ptr);
+    if (model == CPUModel::nmos6502 && (ptr & 0x00FF) == 0x00FF) {
+        const std::uint16_t lo = read(ptr);
+        const std::uint16_t hi = read(ptr & 0xFF00);
+        addr_abs = static_cast<std::uint16_t>(lo | (hi << 8));
+    } else {
+        addr_abs = read16(ptr);
+    }
     return 0;
 }
 
@@ -672,8 +853,40 @@ std::uint8_t CPU::zpr() {
  */
 std::uint8_t CPU::adc() {
     const std::uint8_t value = fetch();
+    const std::uint8_t old_a = reg_a;
     const std::uint16_t sum = static_cast<std::uint16_t>(reg_a) + value + (get_flag(C) ? 1 : 0);
     const std::uint8_t result = static_cast<std::uint8_t>(sum);
+
+    if (get_flag(D)) {
+        const std::uint8_t low_sum = static_cast<std::uint8_t>((old_a & 0x0F) + (value & 0x0F) + (get_flag(C) ? 1 : 0));
+        const std::uint8_t intermediate = static_cast<std::uint8_t>(
+            (old_a & 0xF0) + (value & 0xF0) + (low_sum > 0x09 ? 0x10 : 0x00)
+        );
+        std::uint16_t adjusted_sum = sum;
+
+        if (low_sum > 0x09) {
+            adjusted_sum += 0x06;
+        }
+
+        if (adjusted_sum > 0x99) {
+            adjusted_sum += 0x60;
+        }
+
+        reg_a = static_cast<std::uint8_t>(adjusted_sum);
+        set_flag(C, adjusted_sum > 0xFF);
+        set_flag(V, (~(old_a ^ value) & (old_a ^ intermediate) & 0x80) != 0);
+
+        if (model == CPUModel::nmos6502) {
+            set_flag(Z, result == 0);
+            set_flag(N, (intermediate & 0x80) != 0);
+        } else {
+            set_zn(reg_a);
+            ++cycles;
+        }
+
+        return 1;
+    }
+
     set_flag(C, sum > 0xFF);
     set_flag(V, (~(reg_a ^ value) & (reg_a ^ result) & 0x80) != 0);
     reg_a = result;
@@ -699,7 +912,7 @@ std::uint8_t CPU::asl() {
     set_flag(C, (result & 0x100) != 0);
     const std::uint8_t out = static_cast<std::uint8_t>(result);
     set_zn(out);
-    if (table[opcode].addrmode == &CPU::acc) {
+    if (current_instruction().addrmode == &CPU::acc) {
         reg_a = out;
     } else {
         write(addr_abs, out);
@@ -790,7 +1003,7 @@ std::uint8_t CPU::bvs() {
 std::uint8_t CPU::bit() {
     const std::uint8_t value = fetch();
     set_flag(Z, (reg_a & value) == 0);
-    if (table[opcode].addrmode != &CPU::imm) {
+    if (current_instruction().addrmode != &CPU::imm) {
         set_flag(N, (value & 0x80) != 0);
         set_flag(V, (value & 0x40) != 0);
     }
@@ -863,7 +1076,7 @@ std::uint8_t CPU::cpy() {
  * @brief Decrements memory or the accumulator.
  */
 std::uint8_t CPU::dec() {
-    if (table[opcode].addrmode == &CPU::imp) {
+    if (current_instruction().addrmode == &CPU::imp) {
         --reg_a;
         set_zn(reg_a);
     } else {
@@ -905,7 +1118,7 @@ std::uint8_t CPU::eor() {
  * @brief Increments memory or the accumulator.
  */
 std::uint8_t CPU::inc() {
-    if (table[opcode].addrmode == &CPU::imp) {
+    if (current_instruction().addrmode == &CPU::imp) {
         ++reg_a;
         set_zn(reg_a);
     } else {
@@ -988,7 +1201,7 @@ std::uint8_t CPU::lsr() {
     set_flag(C, (value & 0x01) != 0);
     const std::uint8_t out = static_cast<std::uint8_t>(value >> 1);
     set_zn(out);
-    if (table[opcode].addrmode == &CPU::acc) {
+    if (current_instruction().addrmode == &CPU::acc) {
         reg_a = out;
     } else {
         write(addr_abs, out);
@@ -1000,6 +1213,14 @@ std::uint8_t CPU::lsr() {
  * @brief Executes no operation.
  */
 std::uint8_t CPU::nop() {
+    return 0;
+}
+
+/**
+ * @brief Executes an unsupported or jammed opcode.
+ */
+std::uint8_t CPU::kil() {
+    stopped = true;
     return 0;
 }
 
@@ -1097,7 +1318,7 @@ std::uint8_t CPU::rol() {
     set_flag(C, (result & 0x100) != 0);
     const std::uint8_t out = static_cast<std::uint8_t>(result);
     set_zn(out);
-    if (table[opcode].addrmode == &CPU::acc) {
+    if (current_instruction().addrmode == &CPU::acc) {
         reg_a = out;
     } else {
         write(addr_abs, out);
@@ -1114,7 +1335,7 @@ std::uint8_t CPU::ror() {
     set_flag(C, (value & 0x01) != 0);
     const std::uint8_t out = static_cast<std::uint8_t>((value >> 1) | carry);
     set_zn(out);
-    if (table[opcode].addrmode == &CPU::acc) {
+    if (current_instruction().addrmode == &CPU::acc) {
         reg_a = out;
     } else {
         write(addr_abs, out);
@@ -1147,11 +1368,40 @@ std::uint8_t CPU::rts() {
  * @brief Executes subtract with carry.
  */
 std::uint8_t CPU::sbc() {
-    const std::uint8_t value = static_cast<std::uint8_t>(fetch() ^ 0xFF);
-    const std::uint16_t sum = static_cast<std::uint16_t>(reg_a) + value + (get_flag(C) ? 1 : 0);
+    const std::uint8_t value = fetch();
+    const std::uint8_t old_a = reg_a;
+    const std::uint8_t inverted_value = static_cast<std::uint8_t>(value ^ 0xFF);
+    const std::uint16_t sum = static_cast<std::uint16_t>(reg_a) + inverted_value + (get_flag(C) ? 1 : 0);
     const std::uint8_t result = static_cast<std::uint8_t>(sum);
+
+    if (get_flag(D)) {
+        const std::uint8_t borrow = get_flag(C) ? 0 : 1;
+        std::uint16_t adjusted_difference = static_cast<std::uint16_t>(reg_a) - value - borrow;
+
+        if ((reg_a & 0x0F) < ((value & 0x0F) + borrow)) {
+            adjusted_difference -= 0x06;
+        }
+
+        if (adjusted_difference > 0x99) {
+            adjusted_difference -= 0x60;
+        }
+
+        reg_a = static_cast<std::uint8_t>(adjusted_difference);
+        set_flag(C, sum > 0xFF);
+        set_flag(V, ((old_a ^ result) & (inverted_value ^ result) & 0x80) != 0);
+
+        if (model == CPUModel::nmos6502) {
+            set_zn(result);
+        } else {
+            set_zn(reg_a);
+            ++cycles;
+        }
+
+        return 1;
+    }
+
     set_flag(C, sum > 0xFF);
-    set_flag(V, ((reg_a ^ result) & (value ^ result) & 0x80) != 0);
+    set_flag(V, ((reg_a ^ result) & (inverted_value ^ result) & 0x80) != 0);
     reg_a = result;
     set_zn(reg_a);
     return 1;

@@ -1,8 +1,17 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+//
+// cpp65 is free software: you can redistribute it and/or modify it under
+// the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// any later version.
+
 #include "bus.h"
+#include "version.h"
 
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace {
 
@@ -16,6 +25,19 @@ void expect_string(const std::string& actual, const std::string& expected) {
     if (actual != expected) {
         throw std::runtime_error("unexpected bus output");
     }
+}
+
+void expect_version(std::string_view actual, std::string_view expected) {
+    if (actual != expected) {
+        throw std::runtime_error("unexpected version string");
+    }
+}
+
+void test_builtin_version_is_available() {
+    expect_eq(cpp65::version_major, 0);
+    expect_eq(cpp65::version_minor, 1);
+    expect_eq(cpp65::version_patch, 0);
+    expect_version(cpp65::version, "0.1.0");
 }
 
 void test_ram_bus_read_write_and_load() {
@@ -65,6 +87,7 @@ void test_putchar_bus_routes_output_address() {
 } // namespace
 
 int main() {
+    test_builtin_version_is_available();
     test_ram_bus_read_write_and_load();
     test_ram_bus_vectors_are_little_endian();
     test_putchar_bus_routes_output_address();
