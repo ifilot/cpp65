@@ -1,14 +1,11 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
-#
-# cpp65 is free software: you can redistribute it and/or modify it under
-# the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# any later version.
+# Copyright (C) 2026 Ivo Filot
+# Repository: https://github.com/ifilot/cpp65
 
 cmake_minimum_required(VERSION 3.20)
 
 project(cpp65
-    VERSION 0.1.0
+    VERSION 1.0.0
     DESCRIPTION "6502/65C02 Emulator written in C++20"
     LANGUAGES CXX
 )

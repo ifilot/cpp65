@@ -102,7 +102,7 @@ reset, and then call `tick()` from your emulated machine clock.
 #include <cstdint>
 
 int main() {
-    static_assert(cpp65::version == "0.1.0");
+    static_assert(cpp65::version == "1.0.0");
 
     constexpr std::uint16_t program_start = 0x8000;
     constexpr std::uint16_t result_addr = 0x0200;

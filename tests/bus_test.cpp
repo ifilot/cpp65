@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//
-// cpp65 is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
+// Copyright (C) 2026 Ivo Filot
+// Repository: https://github.com/ifilot/cpp65
 
 #include "bus.h"
 #include "version.h"
@@ -34,10 +31,10 @@ void expect_version(std::string_view actual, std::string_view expected) {
 }
 
 void test_builtin_version_is_available() {
-    expect_eq(cpp65::version_major, 0);
-    expect_eq(cpp65::version_minor, 1);
+    expect_eq(cpp65::version_major, 1);
+    expect_eq(cpp65::version_minor, 0);
     expect_eq(cpp65::version_patch, 0);
-    expect_version(cpp65::version, "0.1.0");
+    expect_version(cpp65::version, "1.0.0");
 }
 
 void test_ram_bus_read_write_and_load() {
